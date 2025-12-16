@@ -23,3 +23,10 @@ ToolchainInfo = provider(
         "name": "The full name of the toolchain",
     },
 )
+
+XcodeProjExtraFilesHintInfo = provider(
+    doc = "Provides a list of extra files to include during project generation",
+    fields = {
+        "files": "List of files to include in the extra files.",
+    },
+)

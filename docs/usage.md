@@ -1,10 +1,11 @@
 - [Bazel aspects](#bazel-aspects)
-  - [`compile_only_aspect`](#compile_only_aspect)
+  - [`xcodeproj_cache_warm_aspect`](#xcodeproj_cache_warm_aspect)
 - [Bazel configs](#bazel-configs)
     - [`rules_xcodeproj`](#rules_xcodeproj)
     - [`rules_xcodeproj_generator`](#rules_xcodeproj_generator)
     - [`rules_xcodeproj_indexbuild`](#rules_xcodeproj_indexbuild)
     - [`rules_xcodeproj_swiftuipreviews`](#rules_xcodeproj_swiftuipreviews)
+    - [`rules_xcodeproj_coverage`](#rules_xcodeproj_coverage)
   - [Project-level configs](#project-level-configs)
   - [Extra config flags](#extra-config-flags)
   - [`.bazelrc` files](#bazelrc-files)
@@ -12,6 +13,7 @@
     - [Workspace `xcodeproj.bazelrc`](#workspace-xcodeprojbazelrc)
     - [Workspace `.bazelrc`](#workspace-bazelrc)
     - [Project `xcodeproj_extra_flags.bazelrc`](#project-xcodeproj_extra_flagsbazelrc)
+  - [Separate the index build output base](#separate-the-index-build-output-base)
 - [Command-line API](#command-line-api)
   - [Commands](#commands)
     - [`build`](#build)
@@ -26,19 +28,19 @@
 
 # Bazel aspects
 
-## `compile_only_aspect`
+## `xcodeproj_cache_warm_aspect`
 
-The `compile_only_aspect` aspect is useful for skipping non-compilation
-related actions. For example, in CI it can be used to help with disk
-space usage by skipping actions that are typically not cached during
-a cache warming job. It can also be used to validate that the targets
-compile while skipping costly actions like bundling, signing, etc.
+The `xcodeproj_cache_warm_aspect` aspect is useful for skipping non-compilation
+related actions. For example, in CI it can be used to help with disk space
+usage by skipping actions that are typically not cached during a cache warming
+job. It can also be used to validate that the targets compile while skipping
+costly actions like bundling, signing, etc.
 
 To use the aspect, you apply it at the command line:
 
 ```
 bazel build //some:target \
-  --aspects=@rules_xcodeproj//xcodeproj:compile_only_aspect.bzl%compile_only_aspect \
+  --aspects=@rules_xcodeproj//xcodeproj:xcodeproj_cache_warm_aspect.bzl%xcodeproj_cache_warm_aspect \
   --output_groups=compiles
 ```
 
@@ -46,8 +48,8 @@ You can also create a Bazel configuration in a `.bazelrc` file to reuse the
 aspect easily:
 
 ```
-common:compile_only --aspects=@rules_xcodeproj//xcodeproj:compile_only_aspect.bzl%compile_only_aspect
-common:compile_only --output_groups=compiles
+common:cache_warming --aspects=@rules_xcodeproj//xcodeproj:xcodeproj_cache_warm_aspect.bzl%xcodeproj_cache_warm_aspect
+common:cache_warming --output_groups=compiles
 ```
 
 And use it, for example, with the command-line API:
@@ -55,7 +57,15 @@ And use it, for example, with the command-line API:
 ```
 bazel run //label/to:xcodeproj \
   -- \
-  'build --config=compile_only --remote_download_minimal $_GENERATOR_LABEL_'
+  'build --config=cache_warming --remote_download_minimal $_GENERATOR_LABEL_'
+```
+
+If you want to also cache resource processing (e.g. asset catalog compiles,
+`Info.plist` processing, entitlement processing, etc.), then you can also
+include the `resources` output group:
+
+```
+common:cache_warming --output_groups=compiles,resources
 ```
 
 # Bazel configs
@@ -109,6 +119,34 @@ SwiftUI Preview build.
 
 You shouldn’t need to adjust this config. The default config applies the needed
 build adjusting flags.
+
+### `rules_xcodeproj_coverage`
+
+> [!NOTE]
+> Code coverage in Xcode with Bazel requires [apple_support](https://github.com/bazelbuild/apple_support) 2.0.0 or later and [rules_swift](https://github.com/bazelbuild/rules_swift) 3.4.1 or later.
+
+The `rules_xcodeproj_coverage` config is used when building the project tests
+inside of Xcode when code coverage is enabled. This config sets the needed
+features inside apple_support and rules_swift to generate coverage data with
+absolute paths to sources so Xcode can map them correctly.
+
+By default, code coverage is **disabled** for test actions of schemes. You can
+enable code coverage in Xcode by setting `code_coverage = True` on an
+[`xcschemes.test_options`](/doc/bazel.md#xcschemes.test_options-code_coverage)
+declaration, or by enabling the "Gather coverage data" option in the scheme editor.
+
+> [!WARNING]
+> Enabling code coverage will cause tests to be built for coverage, which is a
+> distinct configuration mode from normal test builds. For building in Xcode
+> in particular, this results in build outputs that are inherently non-hermetic
+> as they contain absolute paths to source files. This will result in poor
+> cache hit rates for these builds. This does not impact `coverage` builds run
+> using the [command-line API](#command-line-api) or normal `bazel test` runs.
+>
+> It is recommended to only enable code coverage inside of Xcode when actively
+> using it for development, and to use tool sets like
+> [lcov](https://registry.bazel.build/modules/lcov) to produce coverage reports
+> from normal `bazel` test runs.
 
 ## Project-level configs
 
@@ -178,6 +216,15 @@ flags were used during project generation, then those adjustments are made in
 a project `xcodeproj_extra_flags.bazelrc` file, which is loaded after the
 workspace `.bazelrc` file. This ensures that they override any flags set
 earlier, mimicking the behavior of command-line set flags taking precedence.
+
+## Separate the index build output base
+
+By default, rules_xcodeproj configures Xcode to use a combined output base For
+both normal builds and index builds. This is done to save disk space and improve
+cache hit rates, since both types of builds can share outputs. However, if you
+find that index builds are interfering with normal builds, you can disable
+this behavior during project generation by setting
+`--@rules_xcodeproj//xcodeproj:separate_index_build_output_base` in your bazelrc.
 
 # Command-line API
 

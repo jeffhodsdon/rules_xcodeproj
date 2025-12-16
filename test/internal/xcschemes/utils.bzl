@@ -24,6 +24,7 @@ def _dict_to_test_options_info(d):
     return struct(
         app_language = d["app_language"],
         app_region = d["app_region"],
+        code_coverage = d["code_coverage"],
     )
 
 def _dict_to_launch_target_info(d):
@@ -64,6 +65,7 @@ def _dict_to_run_info(d):
         env = _dict_of_dicts_to_env_infos(d["env"]),
         env_include_defaults = d["env_include_defaults"],
         launch_target = _dict_to_launch_target_info(d["launch_target"]),
+        storekit_configuration = d["storekit_configuration"],
         xcode_configuration = d["xcode_configuration"],
     )
 

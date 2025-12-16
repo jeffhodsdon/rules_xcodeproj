@@ -212,6 +212,7 @@ def _run(
         env = "inherit",
         env_include_defaults = True,
         launch_target = None,
+        storekit_configuration = None,
         xcode_configuration = None):
     """Defines the Run action.
 
@@ -335,6 +336,10 @@ def _run(
             `None`, `xcschemes.launch_target()` will be used, which means no
             launch target will be set (i.e. the `Executable` dropdown will be
             set to `None`).
+        storekit_configuration: A StoreKit configuration file for use with
+            [StoreKit Testing](https://developer.apple.com/documentation/xcode/setting-up-storekit-testing-in-xcode).
+
+            Can be `None`, or a label string referring to a single configuration file.
         xcode_configuration: The name of the Xcode configuration to use to build
             the targets referenced in the Run action (i.e in the
             [`build_targets`](#xcschemes.run-build_targets) and
@@ -351,6 +356,7 @@ def _run(
         env = env or {},
         env_include_defaults = TRUE_ARG if env_include_defaults else FALSE_ARG,
         launch_target = launch_target,
+        storekit_configuration = storekit_configuration,
         xcode_configuration = xcode_configuration or "",
     )
 
@@ -1196,7 +1202,11 @@ Address Sanitizer cannot be used together with Thread Sanitizer.
         ),
     )
 
-def _test_options(*, app_language = None, app_region = None):
+def _test_options(
+        *,
+        app_language = None,
+        app_region = None,
+        code_coverage = False):
     """Defines the test options for a custom scheme.
 
     Args:
@@ -1206,11 +1216,20 @@ def _test_options(*, app_language = None, app_region = None):
         app_language: Language to set in scheme.
 
             Defaults to system settings if not set.
+        code_coverage: Whether to enable code coverage.
+
+            If `True`, code coverage will be enabled. Note that out-of-the-box support for inline
+            code coverage UI in Xcode when using Build with Bazel mode requires
+            [apple_support](https://github.com/bazelbuild/apple_support) 2.0.0 or later, and
+            [rules_swift](https://github.com/bazelbuild/rules_swift) 3.4.1 or later.
     """
 
     return struct(
         app_region = app_region,
         app_language = app_language,
+        code_coverage = (
+            TRUE_ARG if code_coverage else FALSE_ARG
+        ),
     )
 
 def _autogeneration_test(*, options = None):
@@ -1264,10 +1283,12 @@ def _autogeneration_config(*, scheme_name_exclude_patterns = None, test = None):
                         options = xcschemes.test_options(
                             app_language = "en",
                             app_region = "US",
+                            code_coverage = False,
                         )
                     )
                 )
             )
+            ```
 
     Returns:
         An opaque value for the [`scheme_autogeneration_config`](xcodeproj-scheme_autogeneration_config) attribute of `xcodeproj`.
@@ -1280,6 +1301,7 @@ def _autogeneration_config(*, scheme_name_exclude_patterns = None, test = None):
         d["test_options"] = [
             test.test_options.app_language or "",
             test.test_options.app_region or "",
+            test.test_options.code_coverage or "",
         ]
 
     return d

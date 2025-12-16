@@ -271,6 +271,7 @@ def info_constructors_test_suite(name):
         expected_info = struct(
             app_language = "",
             app_region = "",
+            code_coverage = "0",
         ),
     )
 
@@ -281,12 +282,14 @@ def info_constructors_test_suite(name):
         info = xcscheme_infos_testable.make_test_options(
             app_language = "en",
             app_region = "US",
+            code_coverage = "0",
         ),
 
         # Expected
         expected_info = struct(
             app_language = "en",
             app_region = "US",
+            code_coverage = "0",
         ),
     )
 
@@ -589,6 +592,7 @@ def info_constructors_test_suite(name):
             env = None,
             env_include_defaults = "1",
             launch_target = xcscheme_infos_testable.make_launch_target(),
+            storekit_configuration = "",
             xcode_configuration = "",
         ),
     )
@@ -621,6 +625,7 @@ def info_constructors_test_suite(name):
             },
             env_include_defaults = "0",
             launch_target = xcscheme_infos_testable.make_launch_target("L"),
+            storekit_configuration = "",
             xcode_configuration = "Run",
         ),
 
@@ -651,6 +656,7 @@ def info_constructors_test_suite(name):
             launch_target = xcscheme_infos_testable.make_launch_target(
                 id = "L",
             ),
+            storekit_configuration = "",
             xcode_configuration = "Run",
         ),
     )
@@ -756,6 +762,7 @@ def info_constructors_test_suite(name):
             options = xcscheme_infos_testable.make_test_options(
                 app_language = "en",
                 app_region = "US",
+                code_coverage = "0",
             ),
             test_targets = [
                 xcscheme_infos_testable.make_test_target("tt 9"),
@@ -793,6 +800,7 @@ def info_constructors_test_suite(name):
             options = xcscheme_infos_testable.make_test_options(
                 app_language = "en",
                 app_region = "US",
+                code_coverage = "0",
             ),
             test_targets = [
                 xcscheme_infos_testable.make_test_target("tt 9"),

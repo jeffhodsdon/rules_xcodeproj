@@ -22,7 +22,6 @@ readonly execution_root_file="$PWD/%execution_root_file%"
 readonly extra_flags_bazelrc="$PWD/%extra_flags_bazelrc%"
 readonly generator_build_file="$PWD/%generator_build_file%"
 readonly generator_defs_bzl="$PWD/%generator_defs_bzl%"
-readonly schemes_json="$PWD/%schemes_json%"
 readonly xcodeproj_bazelrc="$PWD/%xcodeproj_bazelrc%"
 
 installer_flags=(
@@ -33,6 +32,7 @@ installer_flags=(
 config="build"
 original_arg_count=$#
 download_intermediates=0
+separate_indexbuild_output_base=0
 verbose=0
 while (("$#")); do
   case "$1" in
@@ -50,6 +50,10 @@ while (("$#")); do
       ;;
     --download_intermediates)
       download_intermediates=1
+      shift 1
+      ;;
+    --separate_indexbuild_output_base)
+      separate_indexbuild_output_base=1
       shift 1
       ;;
     -v|--verbose)
@@ -72,6 +76,10 @@ if [[ $original_arg_count -gt 0 ]]; then
   elif [[ $# -gt 1 ]]; then
     fail "ERROR: The bazel command must be a string instead of individual arguments"
   fi
+fi
+
+if [[ $separate_indexbuild_output_base -eq 1 ]]; then
+  installer_flags+=(--separate_indexbuild_output_base)
 fi
 
 cd "$BUILD_WORKSPACE_DIRECTORY"
@@ -112,18 +120,8 @@ readonly output_base="${execution_root%/*/*}"
 # Set bazel env
 %collect_bazel_env%
 
-if command -v /sbin/md5 >/dev/null 2>&1; then
-  readonly md5_command="/sbin/md5"
-elif command -v md5sum >/dev/null 2>&1; then
-  readonly md5_command="md5sum"
-else
-  fail "ERROR: Unable to find a command to calculate MD5 hash; please install" \
-    "md5 or md5sum"
-fi
-
 # Create files for the generator target
-output_base_hash=$(echo "$output_base" | "$md5_command" | awk '{print $1}')
-readonly generator_package_directory="/var/tmp/rules_xcodeproj/generated_v2/$output_base_hash/%generator_package_name%"
+readonly generator_package_directory="$output_base/rules_xcodeproj.noindex/%generator_package_name%"
 
 mkdir -p "$generator_package_directory"
 cp "$generator_build_file" "$generator_package_directory/BUILD"
@@ -131,7 +129,7 @@ chmod u+w "$generator_package_directory/BUILD"
 cp "$generator_defs_bzl" "$generator_package_directory/defs.bzl"
 chmod u+w "$generator_package_directory/defs.bzl"
 
-cat >> "$generator_package_directory/defs.bzl" <<EOF
+cat <<EOF >> "$generator_package_directory/defs.bzl"
 
 # Constants
 
@@ -156,36 +154,64 @@ if [[ -s "$extra_flags_bazelrc" ]]; then
   bazelrcs+=("--bazelrc=$extra_flags_bazelrc")
 fi
 
+if [[ -n "${DEVELOPER_DIR:-}" ]]; then
+  if [[ ! -f "${DEVELOPER_DIR%/*}/version.plist" ]]; then
+    echo >&2 "DEVELOPER_DIR is set to invalid path: $DEVELOPER_DIR"
+    exit 1
+  fi
+
+  developer_dir="$DEVELOPER_DIR"
+
+  # We can use a fast path when `DEVELOPER_DIR` is set for us
+  xcode_version=$(
+    /usr/libexec/PlistBuddy \
+      -c 'print ProductBuildVersion' \
+      "${DEVELOPER_DIR%/*}/version.plist"
+  )
+elif command -v xcodebuild > /dev/null 2>&1; then
+  developer_dir="$(/usr/bin/xcode-select -p)"
+
+  # Xcode 15.4\nBuild version 15F31d -> 15F31d
+  xcode_version=$(xcodebuild -version | awk '/Build version/{print $NF}')
+else
+  developer_dir=""
+  xcode_version=""
+fi
+
+touch "$pre_xcodeproj_bazelrc_dir/pre_xcodeproj.bazelrc"
+
 # We write to a `.bazelrc` file instead of passing flags directly in order to
 # support all Bazel commands via the `common` pseudo-command
-cat > "$pre_xcodeproj_bazelrc_dir/pre_xcodeproj.bazelrc" <<EOF
+if [[ -n "$xcode_version" ]]; then
+  cat <<EOF >> "$pre_xcodeproj_bazelrc_dir/pre_xcodeproj.bazelrc"
 # Be explicit about our desired Xcode version
-common:rules_xcodeproj --xcode_version=%xcode_version%
+common:rules_xcodeproj --xcode_version=$xcode_version
 
 # Work around https://github.com/bazelbuild/bazel/issues/8902
 # \`USE_CLANG_CL\` is only used on Windows, we set it here to cause Bazel to
 # re-evaluate the cc_toolchain for a different Xcode version
-common:rules_xcodeproj --repo_env=USE_CLANG_CL=%xcode_version%
-common:rules_xcodeproj --repo_env=XCODE_VERSION=%xcode_version%
+common:rules_xcodeproj --repo_env=USE_CLANG_CL=$xcode_version
+common:rules_xcodeproj --repo_env=XCODE_VERSION=$xcode_version
 EOF
-
-if command -v /usr/bin/xcode-select >/dev/null 2>&1; then
-  developer_dir=$(/usr/bin/xcode-select -p)
-else
-  developer_dir="${DEVELOPER_DIR:-}"
 fi
 
 if [[ -n "$developer_dir" ]]; then
-  cat >> "$pre_xcodeproj_bazelrc_dir/pre_xcodeproj.bazelrc" <<EOF
+  cat <<EOF >> "$pre_xcodeproj_bazelrc_dir/pre_xcodeproj.bazelrc"
 
 # Set \`DEVELOPER_DIR\` in case a bazel wrapper filters it
-common:rules_xcodeproj --repo_env=DEVELOPER_DIR=$developer_dir
+common:rules_xcodeproj --repo_env="DEVELOPER_DIR=$developer_dir"
 EOF
 fi
 
 readonly allowed_vars=(
   "BUILD_WORKSPACE_DIRECTORY"
   "HOME"
+  "HTTP_PROXY"
+  "http_proxy"
+  "HTTPS_PROXY"
+  "https_proxy"
+  "NO_PROXY"
+  "no_proxy"
   "SSH_AUTH_SOCK"
   "TERM"
   "USER"
@@ -226,9 +252,18 @@ if [[ $original_arg_count -eq 0 ]]; then
     "%generator_label%" \
     -- "${installer_flags[@]}"
 else
-  if [[ $config == "build" || $config == "indexbuild" ]]; then
+  if [[
+    $config == "build" ||
+    ($config == "indexbuild" && $separate_indexbuild_output_base -ne 1)
+  ]]; then
     readonly bazel_config="_%config%_build"
     readonly output_base_name="build_output_base"
+  elif [[
+    $config == "indexbuild" &&
+    $separate_indexbuild_output_base -eq 1
+  ]]; then
+    readonly bazel_config="%config%_$config"
+    readonly output_base_name="indexbuild_output_base"
   else
     readonly bazel_config="%config%_$config"
     readonly output_base_name="build_output_base"

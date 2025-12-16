@@ -1,3 +1,4 @@
+import Foundation
 import PBXProj
 import ToolCommon
 import XCScheme
@@ -39,13 +40,23 @@ struct Generator {
             from: arguments.autogenerationConfigFile
         )
 
+        let workspace = URL(filePath: arguments.workspace, directoryHint: .isDirectory)
+        let installPath = if arguments.installPath.isEmpty {
+            workspace
+        } else {
+            URL(filePath: arguments.installPath, directoryHint: .isDirectory, relativeTo: workspace)
+        }
+        let schemesDirectory = URL(filePath: "xcshareddata/xcschemes", directoryHint: .isDirectory, relativeTo: installPath)
+
         let customSchemeInfos = try await environment.createCustomSchemeInfos(
             commandLineArguments: commandLineArguments,
             customSchemesFile: arguments.customSchemesFile,
             environmentVariables: environmentVariables,
             executionActionsFile: arguments.executionActionsFile,
             extensionHostIDs: extensionHostIDs,
-            targetsByID: targetsByID
+            schemesDirectory: schemesDirectory,
+            targetsByID: targetsByID,
+            workspace: workspace
         )
 
         let automaticSchemeInfos = try environment.createAutomaticSchemeInfos(
@@ -57,8 +68,11 @@ struct Generator {
             targets: targets,
             targetsByID: targetsByID,
             targetsByKey: targetsByKey,
-            testOptions: .init(appLanguage: autogenerationConfigArguments.appLanguage,
-                               appRegion: autogenerationConfigArguments.appRegion)
+            testOptions: .init(
+                appLanguage: autogenerationConfigArguments.appLanguage,
+                appRegion: autogenerationConfigArguments.appRegion,
+                codeCoverage: autogenerationConfigArguments.codeCoverage
+            )
         )
 
         let filteredAutomaticSchemeInfos = try automaticSchemeInfos.filter { scheme in

@@ -1,5 +1,6 @@
 """Definitions for handling Bazel repositories used by rules_xcodeproj."""
 
+load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("//xcodeproj/internal:logging.bzl", "green", "warn", "yellow")
 
@@ -59,23 +60,26 @@ package_group(
 """,
     )
 
-    if repository_ctx.execute(["command", "-v", "/sbin/md5"]).return_code == 0:
-        md5_command = "/sbin/md5"
-    else:
-        md5_command = "md5sum"
-
-    output_base_hash_result = repository_ctx.execute(
-        ["bash", "-c", "set -euo pipefail; echo \"${PWD%/*/*/*/*}\" | " + md5_command + " | awk '{print $1}'"],
+    # Construct the output base path, stripping leading /private if needed.
+    output_base_script = """
+        output_base="${PWD%/*/*/*/*}"
+        if [[ $output_base == /private/* ]]; then
+            output_base="${output_base#/private}"
+        fi
+        echo "$output_base"
+    """
+    output_base_result = repository_ctx.execute(
+        ["bash", "-c", output_base_script],
     )
-    if output_base_hash_result.return_code != 0:
-        fail("Failed to calculate output base hash: {}".format(
-            output_base_hash_result.stderr,
+    if output_base_result.return_code != 0:
+        fail("Failed to construct output base path: {}".format(
+            output_base_result.stderr,
         ))
 
-    # Ensure that this repository is unique per output base
-    output_base_hash = output_base_hash_result.stdout.strip()
+    # Create the generator symlink inside the output base.
+    output_base_path = output_base_result.stdout.strip()
     repository_ctx.symlink(
-        "/var/tmp/rules_xcodeproj/generated_v2/{}/generator".format(output_base_hash),
+        output_base_path + "/rules_xcodeproj.noindex/generator",
         "generator",
     )
 
@@ -85,6 +89,7 @@ generated_files_repo = repository_rule(
 
 # buildifier: disable=unnamed-macro
 def xcodeproj_rules_dependencies(
+        module_ctx,
         ignore_version_differences = False,
         include_bzlmod_ready_dependencies = True,
         internal_only = False):
@@ -95,19 +100,23 @@ def xcodeproj_rules_dependencies(
     from changes to those dependencies.
 
     Args:
+        module_ctx: The module_ctx object provided from the module extension.
         ignore_version_differences: If `True`, warnings about potentially
             incompatible versions of dependency repositories will be silenced.
         include_bzlmod_ready_dependencies: Whether or not bzlmod-ready
             dependencies should be included.
         internal_only: If `True`, only internal dependencies will be included.
             Should only be called from `extensions.bzl`.
+
+    Returns:
+        A value from `module_ctx.extension_metadata()` if applicable, or `None`.
     """
     if internal_only or include_bzlmod_ready_dependencies:
         # Used to house generated files
         generated_files_repo(name = "rules_xcodeproj_generated")
 
     if internal_only:
-        return
+        return None
 
     if include_bzlmod_ready_dependencies:
         _maybe(
@@ -182,6 +191,11 @@ native_binary(
 
     # Source dependencies
     _xcodeproj_rules_source_dependencies(ignore_version_differences)
+
+    if bazel_features.external_deps.extension_metadata_has_reproducible:
+        return module_ctx.extension_metadata(reproducible = True)
+    else:
+        return None
 
 # buildifier: disable=unnamed-macro
 def _xcodeproj_rules_source_dependencies(ignore_version_differences = False):

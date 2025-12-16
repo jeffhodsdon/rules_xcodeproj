@@ -218,6 +218,7 @@ def _write_schemes(
     def _add_test_options(test_options):
         custom_scheme_args.add(test_options.app_language)
         custom_scheme_args.add(test_options.app_region)
+        custom_scheme_args.add(test_options.code_coverage)
 
     def _add_env(env):
         if env == None:
@@ -341,6 +342,7 @@ def _write_schemes(
         _add_env(info.run.env)
         custom_scheme_args.add(info.run.env_include_defaults)
         _add_diagnostics(info.run.diagnostics)
+        custom_scheme_args.add(info.run.storekit_configuration)
         custom_scheme_args.add(info.run.xcode_configuration)
 
         _add_launch_target(

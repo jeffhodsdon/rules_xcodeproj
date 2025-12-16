@@ -362,6 +362,7 @@ extension Generator.CreateScheme {
             testAction: createTestAction(
                 appLanguage: schemeInfo.test.options?.appLanguage,
                 appRegion: schemeInfo.test.options?.appRegion,
+                codeCoverage: schemeInfo.test.options?.codeCoverage ?? false,
                 buildConfiguration: schemeInfo.test.xcodeConfiguration ??
                     defaultXcodeConfiguration,
                 commandLineArguments: schemeInfo.test.commandLineArguments,
@@ -400,7 +401,8 @@ extension Generator.CreateScheme {
                 preActions: launchPreActions
                     .sorted(by: compareExecutionActions)
                     .map(\.action),
-                runnable: launchRunnable
+                runnable: launchRunnable,
+                storeKitConfiguration: schemeInfo.run.storeKitConfiguration
             ),
             profileAction: createProfileAction(
                 buildConfiguration: schemeInfo.profile.xcodeConfiguration ??

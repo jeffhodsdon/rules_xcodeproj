@@ -121,6 +121,10 @@ if [ "$ACTION" == "indexbuild" ]; then
   apply_sanitizers=0
 elif [ "${ENABLE_PREVIEWS:-}" == "YES" ]; then
   readonly config="${BAZEL_CONFIG}_swiftuipreviews"
+elif [ "${ENABLE_CODE_COVERAGE:-}" == "YES" ]; then
+  readonly config="${BAZEL_CONFIG}_coverage"
+  
+  echo "warning: Code coverage is enabled. In order to maintain compatibility with Xcode, the instrumented build is not hermetic. Remote cache performance will be affected." >&2
 else
   readonly config="_${BAZEL_CONFIG}_build"
 fi
@@ -192,8 +196,15 @@ done
 
 # Import indexes
 if [ -n "${indexstores_filelists:-}" ]; then
-  "$BAZEL_INTEGRATION_DIR/import_indexstores" \
-    "$PROJECT_DIR" \
-    "${indexstores_filelists[@]/#/$BAZEL_OUT/}" \
-    >"$log_dir/import_indexstores.async.log" 2>&1 &
+  if [[ "${BAZEL_SEPARATE_INDEXBUILD_OUTPUT_BASE:-}" == "YES" ]]; then
+    "$BAZEL_INTEGRATION_DIR/import_indexstores" \
+      "$INDEXING_PROJECT_DIR__NO" \
+      "${indexstores_filelists[@]/#/$output_path/}" \
+      >"$log_dir/import_indexstores.async.log" 2>&1 &
+  else
+    "$BAZEL_INTEGRATION_DIR/import_indexstores" \
+      "$PROJECT_DIR" \
+      "${indexstores_filelists[@]/#/$BAZEL_OUT/}" \
+      >"$log_dir/import_indexstores.async.log" 2>&1 &
+  fi
 fi

@@ -6,27 +6,28 @@ load(":collections.bzl", "uniq")
 load(":execution_root.bzl", "write_execution_root_file")
 load(":providers.bzl", "XcodeProjRunnerOutputInfo")
 
-def _get_xcode_product_version(*, xcode_config):
-    raw_version = str(xcode_config.xcode_version())
-    if not raw_version:
-        fail("""\
-`xcode_config.xcode_version` was not set. This is a bazel bug. Try again.
-""")
-
-    version_components = raw_version.split(".")
-    if len(version_components) < 4:
-        # This will result in analysis cache misses, but it's better than
-        # failing
-        return raw_version
-
-    return version_components[3]
-
 def _process_extra_flags(*, attr, content, setting, config, config_suffix):
     extra_flags = getattr(attr, setting)[BuildSettingInfo].value
     if extra_flags:
         content.append(
             "common:{}{} {}".format(config, config_suffix, extra_flags),
         )
+
+def _resolve_storekit_configurations_map(storekit_configurations_map):
+    file_paths = {}
+    for scheme_name, target in storekit_configurations_map.items():
+        if target.label in file_paths:
+            continue
+        files = target.files.to_list()
+        if not files:
+            continue
+        elif len(files) > 1:
+            fail("""\
+Scheme `{scheme_name}` declares a `storekit_configuration` on its `run` action \
+that is composed of multiple files. The `storekit_configuration` for a scheme \
+must be a single file.""".format(scheme_name = scheme_name))
+        file_paths[str(target.label)] = files[0].path
+    return file_paths
 
 def _serialize_nullable_string(value):
     if not value:
@@ -47,6 +48,8 @@ common:{config}_generator --config=rules_xcodeproj_generator
 common:{config}_generator --config={config}
 common:{config}_indexbuild --config=rules_xcodeproj_indexbuild
 common:{config}_indexbuild --config={config}
+common:{config}_coverage --config=rules_xcodeproj_coverage
+common:{config}_coverage --config={config}
 common:{config}_swiftuipreviews --config=rules_xcodeproj_swiftuipreviews
 common:{config}_swiftuipreviews --config={config}
 common:{config}_asan --config=rules_xcodeproj_asan
@@ -200,6 +203,7 @@ def _write_generator_build_file(
         name,
         runner_label,
         repo,
+        storekit_configurations_map,
         template):
     output = actions.declare_file("{}.generator.BUILD.bazel".format(name))
 
@@ -234,6 +238,8 @@ def _write_generator_build_file(
             "%runner_label%": runner_label,
             "%scheme_autogeneration_config%": str(attr.scheme_autogeneration_config),
             "%scheme_autogeneration_mode%": attr.scheme_autogeneration_mode,
+            "%separate_index_build_output_base%": str(attr._separate_index_build_output_base[BuildSettingInfo].value),
+            "%storekit_configurations_map%": str(storekit_configurations_map),
             "%tags%": tags,
             "%target_name_mode%": attr.target_name_mode,
             "%testonly%": str(attr.testonly),
@@ -272,7 +278,6 @@ def _write_runner(
         package,
         runner_label,
         template,
-        xcode_version,
         xcodeproj_bazelrc):
     output = actions.declare_file("{}-runner.sh".format(name))
 
@@ -358,7 +363,6 @@ def_env+='}}'""".format(
             "%generator_package_name%": generator_package_name,
             "%install_path%": install_path,
             "%runner_label%": runner_label,
-            "%xcode_version%": xcode_version,
             "%xcodeproj_bazelrc%": xcodeproj_bazelrc.short_path,
         },
     )
@@ -380,10 +384,6 @@ def _xcodeproj_runner_impl(ctx):
     install_path = paths.join(
         ctx.attr.install_directory,
         "{}.xcodeproj".format(project_name),
-    )
-
-    xcode_version = _get_xcode_product_version(
-        xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig],
     )
 
     xcodeproj_bazelrc = _write_xcodeproj_bazelrc(
@@ -423,6 +423,7 @@ def _xcodeproj_runner_impl(ctx):
         name = name,
         runner_label = runner_label,
         repo = repo,
+        storekit_configurations_map = _resolve_storekit_configurations_map(attr.storekit_configurations_map),
         template = build_file_template,
     )
 
@@ -443,7 +444,6 @@ def _xcodeproj_runner_impl(ctx):
         install_path = install_path,
         runner_label = runner_label,
         template = ctx.file._runner_template,
-        xcode_version = xcode_version,
         xcodeproj_bazelrc = xcodeproj_bazelrc,
     )
 
@@ -489,6 +489,15 @@ xcodeproj_runner = rule(
         "scheme_autogeneration_mode": attr.string(
             default = "auto",
             values = ["auto", "none", "all"],
+        ),
+        "storekit_configurations_map": attr.string_keyed_label_dict(
+            allow_files = True,
+            mandatory = True,
+            doc = """\
+A dict mapping xcscheme names to Labels of StoreKit Testing configuration files.
+
+While the attr allows for Labels that make up multiple files, the Label must point
+to a single file.""",
         ),
         "target_name_mode": attr.string(
             default = "auto",
@@ -548,11 +557,9 @@ xcodeproj_runner = rule(
             allow_single_file = True,
             default = Label("//xcodeproj/internal/templates:runner.sh"),
         ),
-        "_xcode_config": attr.label(
-            default = configuration_field(
-                name = "xcode_config_label",
-                fragment = "apple",
-            ),
+        "_separate_index_build_output_base": attr.label(
+            default = Label("//xcodeproj:separate_index_build_output_base"),
+            providers = [BuildSettingInfo],
         ),
     },
     executable = True,

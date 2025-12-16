@@ -76,9 +76,12 @@ fi
 
 # Import indexes with error handling
 if [ -n "${indexstores_filelists:-}" ]; then
-  if ! "$BAZEL_INTEGRATION_DIR/import_indexstores" \
-    "$PROJECT_DIR" \
-    "${indexstores_filelists[@]/#/$BAZEL_OUT/}"; then
+  if [[ "${BAZEL_SEPARATE_INDEXBUILD_OUTPUT_BASE:-}" == "YES" ]]; then
+    import_cmd=("$BAZEL_INTEGRATION_DIR/import_indexstores" "$INDEXING_PROJECT_DIR__NO" "${indexstores_filelists[@]/#/$output_path/}")
+  else
+    import_cmd=("$BAZEL_INTEGRATION_DIR/import_indexstores" "$PROJECT_DIR" "${indexstores_filelists[@]/#/$BAZEL_OUT/}")
+  fi
+  if ! "${import_cmd[@]}"; then
     if [[ "${ENABLE_PREVIEWS:-}" == "YES" ]]; then
       echo "Warning: Index import failed for preview build, continuing without indexes" >&2
     else
