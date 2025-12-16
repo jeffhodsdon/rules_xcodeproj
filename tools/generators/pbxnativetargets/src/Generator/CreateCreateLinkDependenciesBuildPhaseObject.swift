@@ -46,7 +46,7 @@ perl -pe 's/\$(\()?([a-zA-Z_]\w*)(?(1)\))/$ENV{$2}/g' \
             #"""
 set -euo pipefail
 
-if [[ "${ENABLE_PREVIEWS:-}" == "YES" ]]; then
+if [[ "${ENABLE_PREVIEWS:-}" == "YES" ]] || [[ "${ENABLE_DEBUG_DYLIB:-}" == "YES" ]]; then
 \#(action)
 else
   touch "$SCRIPT_OUTPUT_FILE_0"

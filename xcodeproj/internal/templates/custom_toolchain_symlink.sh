@@ -40,7 +40,15 @@ echo "%tool_names_list%" > "$TOOL_NAMES_FILE"
 DEFAULT_TOOLCHAIN=$(retry_command xcrun --find clang | sed 's|/usr/bin/clang$||')
 XCODE_RAW_VERSION=$(retry_command xcodebuild -version | head -n 1)
 
-HOME_TOOLCHAIN_NAME="BazelRulesXcodeProj${XCODE_VERSION}"
+# Extract unique workspace hash from the Bazel output base path
+# Path format: /Users/j/.cache/bazel/<hash>/rules_xcodeproj.noindex/...
+# We extract the first 8 chars of the hash to make toolchain names unique per workspace
+WORKSPACE_HASH=""
+if [[ "$PWD" =~ \.cache/bazel/([a-f0-9]{8}) ]]; then
+    WORKSPACE_HASH="_${BASH_REMATCH[1]}"
+fi
+
+HOME_TOOLCHAIN_NAME="BazelRulesXcodeProj${XCODE_VERSION}${WORKSPACE_HASH}"
 USER_TOOLCHAIN_PATH="/Users/$(id -un)/Library/Developer/Toolchains/${HOME_TOOLCHAIN_NAME}.xctoolchain"
 BUILT_TOOLCHAIN_PATH="$PWD/$TOOLCHAIN_DIR"
 
@@ -219,7 +227,7 @@ finalize_toolchain() {
       <string>${HOME_TOOLCHAIN_NAME}</string>
     </array>
     <key>CFBundleIdentifier</key>
-    <string>com.rules_xcodeproj.BazelRulesXcodeProj.${XCODE_VERSION}</string>
+    <string>com.rules_xcodeproj.${HOME_TOOLCHAIN_NAME}</string>
     <key>CompatibilityVersion</key>
     <integer>2</integer>
     <key>CompatibilityVersionDisplayString</key>

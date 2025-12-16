@@ -23,6 +23,9 @@ _LD_SKIP_OPTS = {
     # Xcode sets this, even if `CLANG_LINK_OBJC_RUNTIME = NO` is set
     "-fobjc-link-runtime": 1,
 
+    # Xcode sets objc_abi_version itself (-objc_abi_version -Xlinker 2)
+    "-objc_abi_version": 3,
+
     # This is wrapped_clang specific, and we don't want to translate it for BwX
     "-Wl,-oso_prefix,__BAZEL_EXECUTION_ROOT__/": 1,
     "OSO_PREFIX_MAP_PWD": 1,
@@ -113,7 +116,12 @@ def _process_linkopts(
 
         # These flags are for wrapped_clang only
         if (opt.startswith("DSYM_HINT_DSYM_PATH=") or
-            opt.startswith("DSYM_HINT_LINKED_BINARY=")):
+            opt.startswith("DSYM_HINT_LINKED_BINARY=") or
+            opt.startswith("LINKED_BINARY=")):
+            return
+
+        # Xcode sets objc_abi_version itself
+        if opt.startswith("-Wl,-objc_abi_version,"):
             return
 
         # Use Xcode set `DEVELOPER_DIR`

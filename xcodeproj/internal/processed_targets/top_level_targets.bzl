@@ -550,6 +550,7 @@ def _process_focused_top_level_target(
         if info.xcode_target
     ]
 
+
     if product_type == _WATCHKIT_APP_PRODUCT_TYPE:
         watchkit_extensions = [
             info.xcode_target.id
@@ -579,6 +580,20 @@ def _process_focused_top_level_target(
     module_name_attribute = (
         props.product_name if bundle_info != None else module_name_attribute
     )
+
+    # Exclude merged product files from libraries to link
+    # When sources are merged from a library target, Xcode compiles them during
+    # preview builds, so we shouldn't also link the Bazel-built library
+    raw_libraries_path_to_link = linker_input_files.get_libraries_path_to_link(linker_inputs)
+    if mergeable_info:
+        merged_product_paths = {f.path: None for f in mergeable_info.product_files if f}
+        libraries_path_to_link = depset([
+            path
+            for path in raw_libraries_path_to_link.to_list()
+            if path not in merged_product_paths
+        ])
+    else:
+        libraries_path_to_link = raw_libraries_path_to_link
 
     return processed_targets.make(
         compilation_providers = provider_compilation_providers,
@@ -624,8 +639,7 @@ def _process_focused_top_level_target(
             watchkit_extension = watchkit_extension,
             linker_inputs_for_libs_search_paths = linker_input_files
                 .get_linker_inputs_for_libs_search_paths(linker_inputs),
-            libraries_path_to_link = linker_input_files
-                .get_libraries_path_to_link(linker_inputs),
+            libraries_path_to_link = libraries_path_to_link,
         ),
     )
 

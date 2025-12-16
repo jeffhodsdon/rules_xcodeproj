@@ -58,9 +58,18 @@ cp -RP "$SYMLINK_TOOLCHAIN_DIR/"* "$FINAL_TOOLCHAIN_DIR/"
 TOOLCHAIN_BIN_DIR="$FINAL_TOOLCHAIN_DIR/usr/bin"
 mkdir -p "$TOOLCHAIN_BIN_DIR"
 
+# Extract unique workspace hash from the Bazel output base path
+# Path format: /Users/j/.cache/bazel/<hash>/rules_xcodeproj.noindex/...
+WORKSPACE_HASH=""
+if [[ "$PWD" =~ \.cache/bazel/([a-f0-9]{8}) ]]; then
+    WORKSPACE_HASH="_${BASH_REMATCH[1]}"
+fi
+
 # Create a symlink to the toolchain in the user's Library directory
-HOME_TOOLCHAIN_NAME=$(basename "$FINAL_TOOLCHAIN_DIR")
-USER_TOOLCHAIN_PATH="/Users/$(id -un)/Library/Developer/Toolchains/$HOME_TOOLCHAIN_NAME"
+# Include workspace hash to allow multiple projects to coexist
+BASE_TOOLCHAIN_NAME=$(basename "$FINAL_TOOLCHAIN_DIR" | sed 's/\.xctoolchain$//')
+HOME_TOOLCHAIN_NAME="${BASE_TOOLCHAIN_NAME}${WORKSPACE_HASH}"
+USER_TOOLCHAIN_PATH="/Users/$(id -un)/Library/Developer/Toolchains/${HOME_TOOLCHAIN_NAME}.xctoolchain"
 mkdir -p "$(dirname "$USER_TOOLCHAIN_PATH")"
 if [[ -e "$USER_TOOLCHAIN_PATH" || -L "$USER_TOOLCHAIN_PATH" ]]; then
     rm -rf "$USER_TOOLCHAIN_PATH"

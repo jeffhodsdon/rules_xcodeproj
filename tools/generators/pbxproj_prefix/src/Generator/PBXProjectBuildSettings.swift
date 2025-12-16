@@ -85,12 +85,13 @@ extension Generator {
             .init(key: "COPY_PHASE_STRIP", value: "NO"),
             .init(key: "DEBUG_INFORMATION_FORMAT", value: "dwarf"),
             .init(key: "DSTROOT", value: #""$(PROJECT_TEMP_DIR)""#),
-            .init(key: "ENABLE_DEBUG_DYLIB", value: "NO"),
-            .init(key: "ENABLE_DEFAULT_SEARCH_PATHS", value: "NO"),
+            .init(key: "ENABLE_DEBUG_DYLIB", value: "YES"),
+            .init(key: "ENABLE_DEFAULT_SEARCH_PATHS", value: "YES"),
             .init(key: "ENABLE_STRICT_OBJC_MSGSEND", value: "YES"),
             .init(key: "ENABLE_USER_SCRIPT_SANDBOXING", value: "NO"),
             .init(key: "GCC_OPTIMIZATION_LEVEL", value: "0"),
-            .init(key: "TOOLCHAINS", value: customToolchainID),
+            // Disabled for SwiftUI Preview support - custom toolchain causes module issues
+            // .init(key: "TOOLCHAINS", value: customToolchainID),
             .init(
                 key: "IMPORT_INDEX_BUILD_INDEXSTORES",
                 value: importIndexBuildIndexstores ? "YES" : "NO"
