@@ -84,8 +84,9 @@ detect_swift_static_libraries() {
             fi
         fi
     done
-    
-    echo "${swift_libs[@]}"
+
+    # Use safe expansion to avoid unbound variable error when array is empty
+    echo "${swift_libs[@]+"${swift_libs[@]}"}"
 }
 
 # Apply Swift runtime configuration to all preview builds
@@ -159,11 +160,16 @@ setup_swift_runtime_for_previews() {
 force_load_swift_libraries() {
     local is_preview="$1"
     shift
-    local swift_libraries=("$@")
-    
-    if [[ "$is_preview" == "true" ]]; then
+    # Handle empty array case safely
+    if [[ $# -eq 0 ]]; then
+        local swift_libraries=()
+    else
+        local swift_libraries=("$@")
+    fi
+
+    if [[ "$is_preview" == "true" && ${#swift_libraries[@]} -gt 0 ]]; then
         echo "Applying selective force-loading for ${#swift_libraries[@]} Swift libraries..." >&1
-        
+
         # Use selective force-loading instead of global -all_load to avoid duplicate symbols
         for lib in "${swift_libraries[@]}"; do
             if [[ -f "$lib" ]]; then
@@ -215,8 +221,8 @@ log_preview_setup() {
 }
 
 # === Persistent trace so we can verify wrapper execution even if stderr is swallowed ===
-# Choose a path inside Bazel’s output tree if available, otherwise fallback to $TMPDIR.
-log_root="${BAZEL_OUT:-$TMPDIR}"
+# Choose a path inside Bazel's output tree if available, otherwise fallback to $TMPDIR or /tmp.
+log_root="${BAZEL_OUT:-${TMPDIR:-/tmp}}"
 # Ensure directory exists (ignore errors if TMPDIR already exists).
 mkdir -p "$log_root" 2>/dev/null || true
 echo "[ld wrapper] $(date '+%Y-%m-%d %H:%M:%S')  $0  $*" >> "$log_root/ld_wrapper.log"
@@ -230,10 +236,10 @@ has_blocks_rt_flag=false
 developer_dir=""
 platform_name=""
 
-# Filter out merged product libraries for preview builds to prevent duplicate symbols
+# Filter out merged product libraries to prevent duplicate symbols in BwX mode
 # RULES_XCODEPROJ_MERGED_LIBS contains semicolon-separated library names to exclude
-# Only filter during preview builds (ENABLE_PREVIEWS=YES)
-if [[ "${ENABLE_PREVIEWS:-}" == "YES" && -n "${RULES_XCODEPROJ_MERGED_LIBS:-}" ]]; then
+# These libraries are compiled by Xcode, so we must not also link the pre-built versions
+if [[ -n "${RULES_XCODEPROJ_MERGED_LIBS:-}" ]]; then
   declare -A EXCLUDE_LIBS
   IFS=';' read -ra LIB_ARRAY <<< "$RULES_XCODEPROJ_MERGED_LIBS"
   for lib in "${LIB_ARRAY[@]}"; do
@@ -504,11 +510,11 @@ do
     swift_libs=($(detect_swift_static_libraries "${@:1}"))
     
     setup_swift_runtime_for_previews "$is_preview_build"
-    force_load_swift_libraries "$is_preview_build" "${swift_libs[@]}"
+    force_load_swift_libraries "$is_preview_build" ${swift_libs[@]+"${swift_libs[@]}"}
     log_preview_setup "$is_preview_build" "${#swift_libs[@]}"
-    
+
     echo "Final passthrough_args for preview thunk: ${passthrough_args[*]}" >&1
-    
+
     # TODO: Make this work with custom toolchains
     exec "$developer_dir/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang" "${passthrough_args[@]}"
     ;;
@@ -516,16 +522,16 @@ do
   -o)
     echo "Output linking detected: $2" >&1
     # This is a real linking operation - use clang like preview-thunk does
-    
+
     # Use enhanced preview detection and setup
     is_preview_build=$(detect_preview_build "${@:1}")
     swift_libs=($(detect_swift_static_libraries "${@:1}"))
-    
+
     echo "Enhanced preview detection result: $is_preview_build" >&1
-    
+
     # Apply preview-specific setup
     setup_swift_runtime_for_previews "$is_preview_build"
-    force_load_swift_libraries "$is_preview_build" "${swift_libs[@]}"
+    force_load_swift_libraries "$is_preview_build" ${swift_libs[@]+"${swift_libs[@]}"}
     log_preview_setup "$is_preview_build" "${#swift_libs[@]}"
     
     echo "Final passthrough_args for output linking: ${passthrough_args[*]}" >&1
