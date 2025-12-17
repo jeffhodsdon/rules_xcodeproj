@@ -345,6 +345,9 @@ def _write_consolidation_map_targets(
                 )
                 top_level_targets_args.add(xcode_target.compile_target_ids)
                 top_level_targets_args.add(unit_test_host)
+                top_level_targets_args.add(
+                    xcode_target.merged_product_lib_names or EMPTY_STRING,
+                )
 
     actions.write(target_arguments_file, targets_args)
     actions.write(top_level_target_attributes_file, top_level_targets_args)

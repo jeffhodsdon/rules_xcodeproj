@@ -160,7 +160,8 @@ extension Generator.CreateXcodeConfigurations {
             ),
             productType: productType,
             productName: productName,
-            uiTestHostName: uiTestHostName
+            uiTestHostName: uiTestHostName,
+            mergedProductLibNames: platformVariants.first?.mergedProductLibNames
         )
 
         var xcodeConfigurationBuildSettings: [

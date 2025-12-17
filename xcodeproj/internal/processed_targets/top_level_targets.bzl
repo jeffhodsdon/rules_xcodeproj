@@ -259,6 +259,14 @@ def _process_focused_top_level_target(
         transitive_dependencies,
         transitive_infos,
         unfocus_if_not_test_host):
+    # NOTE: We previously tried filtering libraries here based on xcode_targets
+    # to avoid duplicate symbols. However, that breaks regular (non-preview)
+    # builds which need those libraries in PBXFrameworksBuildPhase.
+    #
+    # The duplicate symbols issue occurs during preview builds because link.params
+    # contains -force_load for libraries that are also compiled by Xcode.
+    # The solution is to filter link.params at runtime (during preview builds)
+    # using the merged_product_lib_names, not to filter at project generation time.
     linker_inputs = linker_input_files.collect(
         automatic_target_info = automatic_target_info,
         compilation_providers = target_compilation_providers,
@@ -584,19 +592,54 @@ def _process_focused_top_level_target(
         props.product_name if bundle_info != None else module_name_attribute
     )
 
-    # Exclude merged product files from libraries to link
-    # When sources are merged from a library target, Xcode compiles them during
-    # preview builds, so we shouldn't also link the Bazel-built library
-    raw_libraries_path_to_link = linker_input_files.get_libraries_path_to_link(linker_inputs)
+    # Get all libraries to link. Merged product filtering is now done at
+    # runtime in clang.sh (only during preview builds) to avoid breaking
+    # regular simulator/device builds.
+    libraries_path_to_link = linker_input_files.get_libraries_path_to_link(linker_inputs)
+
+    # Compute library names to filter during preview builds to avoid duplicate
+    # symbols. This includes:
+    # 1. Merged library products (e.g., ComplexAppLib merged into ComplexApp)
+    # 2. All Xcode-compiled libraries from transitive dependencies (e.g.,
+    #    UIComponents which is a native target that Xcode will compile)
+    #
+    # During preview builds, link.params contains -force_load for these libraries,
+    # but Xcode also compiles them as native targets. Without filtering, we'd
+    # get duplicate symbols.
+    xcode_compiled_lib_names = []
+
+    # Add merged library names
     if mergeable_info:
-        merged_product_paths = {f.path: None for f in mergeable_info.product_files if f}
-        libraries_path_to_link = depset([
-            path
-            for path in raw_libraries_path_to_link.to_list()
-            if path not in merged_product_paths
-        ])
-    else:
-        libraries_path_to_link = raw_libraries_path_to_link
+        for f in mergeable_info.product_files:
+            if f:
+                basename = f.basename  # e.g., "libAppLib.a"
+                if basename.startswith("lib") and basename.endswith(".a"):
+                    # Extract "AppLib" from "libAppLib.a"
+                    xcode_compiled_lib_names.append(basename[3:-2])
+
+    # Add all transitive xcode target library names
+    all_xcode_targets = depset(
+        transitive = [
+            info.xcode_targets
+            for info in transitive_infos
+        ],
+    ).to_list()
+
+    for xcode_target in all_xcode_targets:
+        if not xcode_target.product:
+            continue
+        # xcode_target.product is the xcode_product struct with basename, name, type, etc.
+        basename = xcode_target.product.basename
+        if not basename:
+            continue
+        if basename.startswith("lib") and basename.endswith(".a"):
+            lib_name = basename[3:-2]
+            if lib_name not in xcode_compiled_lib_names:
+                xcode_compiled_lib_names.append(lib_name)
+
+    merged_product_lib_names = (
+        ";".join(xcode_compiled_lib_names) if xcode_compiled_lib_names else None
+    )
 
     return processed_targets.make(
         compilation_providers = provider_compilation_providers,
@@ -628,6 +671,7 @@ def _process_focused_top_level_target(
             label = label,
             link_params = link_params,
             mergeable_info = mergeable_info,
+            merged_product_lib_names = merged_product_lib_names,
             module_name = module_name,
             module_name_attribute = (
                 props.product_name if bundle_info != None else module_name_attribute

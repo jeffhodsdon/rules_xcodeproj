@@ -65,7 +65,7 @@ def _collect_linker_inputs(
     libraries = [
         lib
         for lib in all_libs
-        if (lib.basename.endswith(".a") or
+        if lib and (lib.basename.endswith(".a") or
             lib.basename.endswith(".dylib")) and
            lib.owner != target.label
     ]

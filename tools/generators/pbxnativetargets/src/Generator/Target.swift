@@ -35,6 +35,10 @@ enum Target {
         let unitTestHost: UnitTestHost?
         let dSYMPathsBuildSetting: String?
         let librarySearchPaths: Set<BazelPath>
+
+        /// Semicolon-separated library names for runtime filtering during previews.
+        /// e.g., "AppLib;OtherLib" for -lAppLib and -lOtherLib
+        let mergedProductLibNames: String?
     }
 
     struct UnitTestHost: Equatable {

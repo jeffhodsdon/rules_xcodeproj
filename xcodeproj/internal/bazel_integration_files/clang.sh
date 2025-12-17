@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# For preview builds, pass through to the real clang
+# For preview builds, pass through to the real clang with optional library filtering
 if [[ "${ENABLE_PREVIEWS:-}" == "YES" ]]; then
   # Extract developer dir from -isysroot argument
   DEV_DIR=""
@@ -19,7 +19,44 @@ if [[ "${ENABLE_PREVIEWS:-}" == "YES" ]]; then
   fi
 
   real_clang="$DEV_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
-  exec "$real_clang" "$@"
+
+  # Filter merged product libraries to prevent duplicate symbols
+  # RULES_XCODEPROJ_MERGED_LIBS contains semicolon-separated library names to exclude
+  # e.g., "AppLib;OtherMergedLib" will filter out -lAppLib and -lOtherMergedLib
+  if [[ -n "${RULES_XCODEPROJ_MERGED_LIBS:-}" ]]; then
+    # Build associative array of libraries to exclude
+    declare -A EXCLUDE_LIBS
+    IFS=';' read -ra LIB_ARRAY <<< "$RULES_XCODEPROJ_MERGED_LIBS"
+    for lib in "${LIB_ARRAY[@]}"; do
+      if [[ -n "$lib" ]]; then
+        EXCLUDE_LIBS["$lib"]=1
+      fi
+    done
+
+    # Filter arguments
+    filtered_args=()
+    for arg in "$@"; do
+      # Check if this is a -l flag for a library we should exclude
+      if [[ "$arg" =~ ^-l(.+)$ ]]; then
+        libname="${BASH_REMATCH[1]}"
+        if [[ -n "${EXCLUDE_LIBS[$libname]:-}" ]]; then
+          continue  # Skip this library
+        fi
+      fi
+      # Check if this is a full path to a library we should exclude (e.g., /path/to/libAppLib.a)
+      if [[ "$arg" =~ lib([^/]+)\.a$ ]]; then
+        libname="${BASH_REMATCH[1]}"
+        if [[ -n "${EXCLUDE_LIBS[$libname]:-}" ]]; then
+          continue  # Skip this library
+        fi
+      fi
+      filtered_args+=("$arg")
+    done
+
+    exec "$real_clang" "${filtered_args[@]}"
+  else
+    exec "$real_clang" "$@"
+  fi
 fi
 
 # find the first argument that has a _dependency_info.dat extension

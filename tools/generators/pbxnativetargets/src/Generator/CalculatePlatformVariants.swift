@@ -137,7 +137,9 @@ extension Generator.CalculatePlatformVariants {
                     dSYMPathsBuildSetting:
                         targetArguments.dSYMPathsBuildSetting.isEmpty ?
                     nil : targetArguments.dSYMPathsBuildSetting,
-                    librarySearchPaths: Set(targetArguments.librarySearchPaths)
+                    librarySearchPaths: Set(targetArguments.librarySearchPaths),
+                    mergedProductLibNames:
+                        topLevelTargetAttributes?.mergedProductLibNames
                 )
             )
         }

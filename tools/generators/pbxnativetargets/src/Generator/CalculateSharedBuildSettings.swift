@@ -21,7 +21,8 @@ extension Generator {
             platforms: OrderedSet<Platform>,
             productType: PBXProductType,
             productName: String,
-            uiTestHostName: String?
+            uiTestHostName: String?,
+            mergedProductLibNames: String?
         ) -> [BuildSetting] {
             return callable(
                 /*name:*/ name,
@@ -29,7 +30,8 @@ extension Generator {
                 /*platforms:*/ platforms,
                 /*productType:*/ productType,
                 /*productName:*/ productName,
-                /*uiTestHostName:*/ uiTestHostName
+                /*uiTestHostName:*/ uiTestHostName,
+                /*mergedProductLibNames:*/ mergedProductLibNames
             )
         }
     }
@@ -44,7 +46,8 @@ extension Generator.CalculateSharedBuildSettings {
         _ platforms: OrderedSet<Platform>,
         _ productType: PBXProductType,
         _ productName: String,
-        _ uiTestHostName: String?
+        _ uiTestHostName: String?,
+        _ mergedProductLibNames: String?
     ) -> [BuildSetting]
 
     static func defaultCallable(
@@ -53,7 +56,8 @@ extension Generator.CalculateSharedBuildSettings {
         platforms: OrderedSet<Platform>,
         productType: PBXProductType,
         productName: String,
-        uiTestHostName: String?
+        uiTestHostName: String?,
+        mergedProductLibNames: String?
     ) -> [BuildSetting] {
         var buildSettings: [BuildSetting] = []
 
@@ -132,6 +136,20 @@ extension Generator.CalculateSharedBuildSettings {
                     value: #""$(ENABLE_PREVIEWS)""#
                 )
             )
+        } else if productType == .application ||
+                    productType == .messagesApplication ||
+                    productType == .onDemandInstallCapableApplication ||
+                    productType == .watch2App ||
+                    productType == .watch2AppContainer {
+            // Xcode 15+ previews require ENABLE_DEBUG_DYLIB for executable targets
+            // to use the new build layout for unoptimized builds.
+            // Set it conditionally so it only applies during preview builds.
+            buildSettings.append(
+                .init(
+                    key: "ENABLE_DEBUG_DYLIB",
+                    value: #""$(ENABLE_PREVIEWS)""#
+                )
+            )
         } else if productType == .uiTestBundle {
             // UI tests require code signing to enable debugging
             buildSettings.append(
@@ -152,6 +170,18 @@ extension Generator.CalculateSharedBuildSettings {
             // We set the `productType` to `.framework` to get the better
             // looking icon, so we need to manually set `MACH_O_TYPE`
             buildSettings.append(.init(key: "MACH_O_TYPE", value: "staticlib"))
+        }
+
+        // Set merged product library names for runtime filtering during
+        // SwiftUI Preview builds. clang.sh uses this to filter out merged
+        // libraries and prevent duplicate symbol errors.
+        if let mergedProductLibNames, !mergedProductLibNames.isEmpty {
+            buildSettings.append(
+                .init(
+                    key: "RULES_XCODEPROJ_MERGED_LIBS",
+                    value: mergedProductLibNames.pbxProjEscaped
+                )
+            )
         }
 
         return buildSettings

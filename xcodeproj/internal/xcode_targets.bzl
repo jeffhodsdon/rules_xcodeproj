@@ -74,6 +74,7 @@ def _make_xcode_target(
         label,
         link_params = None,
         mergeable_info = None,
+        merged_product_lib_names = None,
         module_name,
         module_name_attribute,
         outputs,
@@ -125,6 +126,9 @@ def _make_xcode_target(
             `LIBRARY_SEARCH_PATHS` build setting.
         libraries_path_to_link: A depset of libraries paths to link to the
             target.
+        merged_product_lib_names: A semicolon-separated string of library names
+            that are merged into this target. Used for runtime filtering during
+            SwiftUI Preview builds to prevent duplicate symbols.
     """
     if not is_top_level:
         compile_stub_needed = False
@@ -163,6 +167,7 @@ def _make_xcode_target(
         inputs = inputs,
         label = label,
         link_params = link_params,
+        merged_product_lib_names = merged_product_lib_names or EMPTY_STRING,
         module_name = module_name or EMPTY_STRING,
         module_name_attribute = module_name_attribute or EMPTY_STRING,
         outputs = _to_xcode_target_outputs(outputs),

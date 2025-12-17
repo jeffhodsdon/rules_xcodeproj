@@ -12,6 +12,7 @@ _PROPAGATE_PROVIDERS_PRODUCT_TYPES = {
     "f": None,  # com.apple.product-type.framework
 }
 
+# Check if ObjC linking info is available (depends on Bazel version)
 _objc_has_linking_info = not bazel_features.cc.objc_linking_info_migrated
 
 def _legacy_merge_cc_compilation_context(

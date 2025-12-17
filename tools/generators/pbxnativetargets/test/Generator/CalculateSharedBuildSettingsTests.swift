@@ -268,6 +268,71 @@ class CalculateSharedBuildSettingsTests: XCTestCase {
             expectedBuildSettings
         )
     }
+
+    func test_mergedProductLibNames() {
+        // Arrange
+
+        let mergedProductLibNames = "AppLib;OtherLib"
+
+        let expectedBuildSettings = baseBuildSettings.updating([
+            "RULES_XCODEPROJ_MERGED_LIBS": #""AppLib;OtherLib""#,
+        ])
+
+        // Act
+
+        let buildSettings = calculateSharedBuildSettingsWithDefaults(
+            mergedProductLibNames: mergedProductLibNames
+        )
+
+        // Assert
+
+        XCTAssertNoDifference(
+            buildSettings.asDictionary,
+            expectedBuildSettings
+        )
+    }
+
+    func test_mergedProductLibNames_nil() {
+        // Arrange
+
+        let mergedProductLibNames: String? = nil
+
+        let expectedBuildSettings = baseBuildSettings
+
+        // Act
+
+        let buildSettings = calculateSharedBuildSettingsWithDefaults(
+            mergedProductLibNames: mergedProductLibNames
+        )
+
+        // Assert
+
+        XCTAssertNoDifference(
+            buildSettings.asDictionary,
+            expectedBuildSettings
+        )
+    }
+
+    func test_mergedProductLibNames_empty() {
+        // Arrange
+
+        let mergedProductLibNames = ""
+
+        let expectedBuildSettings = baseBuildSettings
+
+        // Act
+
+        let buildSettings = calculateSharedBuildSettingsWithDefaults(
+            mergedProductLibNames: mergedProductLibNames
+        )
+
+        // Assert
+
+        XCTAssertNoDifference(
+            buildSettings.asDictionary,
+            expectedBuildSettings
+        )
+    }
 }
 
 private func calculateSharedBuildSettingsWithDefaults(
@@ -276,7 +341,8 @@ private func calculateSharedBuildSettingsWithDefaults(
         platforms: OrderedSet<Platform> = [.macOS],
         productType: PBXProductType = .staticLibrary,
         productName: String = "product_name",
-        uiTestHostName: String? = nil
+        uiTestHostName: String? = nil,
+        mergedProductLibNames: String? = nil
 ) -> [BuildSetting] {
     return Generator.CalculateSharedBuildSettings.defaultCallable(
         name: name,
@@ -284,7 +350,8 @@ private func calculateSharedBuildSettingsWithDefaults(
         platforms: platforms,
         productType: productType,
         productName: productName,
-        uiTestHostName: uiTestHostName
+        uiTestHostName: uiTestHostName,
+        mergedProductLibNames: mergedProductLibNames
     )
 }
 

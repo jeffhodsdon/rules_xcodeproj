@@ -13,19 +13,23 @@ struct TopLevelTargetAttributes {
     let executableName: String?
     let compileTargetIDs: String?
     let unitTestHost: TargetID?
+
+    /// Semicolon-separated library names for runtime filtering during previews.
+    /// e.g., "AppLib;OtherLib" for -lAppLib and -lOtherLib
+    let mergedProductLibNames: String?
 }
 
 extension Dictionary<TargetID, TopLevelTargetAttributes> {
     static func parse(from url: URL) async throws -> Self {
         var rawArgs = ArraySlice(try await url.allLines.collect())
 
-        guard rawArgs.count.isMultiple(of: 7) else {
+        guard rawArgs.count.isMultiple(of: 8) else {
             throw PreconditionError(message: """
-"\(url.path)": Number of lines must be a multiple of 7.
+"\(url.path)": Number of lines must be a multiple of 8.
 """)
         }
 
-        let targetCount = rawArgs.count / 7
+        let targetCount = rawArgs.count / 8
 
         var keysWithValues: [(TargetID, TopLevelTargetAttributes)] = []
         for _ in (0..<targetCount) {
@@ -55,6 +59,11 @@ extension Dictionary<TargetID, TopLevelTargetAttributes> {
                 as: TargetID?.self,
                 in: url
             )
+            let mergedProductLibNames = try rawArgs.consumeArg(
+                "merged-product-lib-names",
+                as: String?.self,
+                in: url
+            )
 
             keysWithValues.append(
                 (
@@ -65,7 +74,8 @@ extension Dictionary<TargetID, TopLevelTargetAttributes> {
                         linkParams: linkParams,
                         executableName: executableName,
                         compileTargetIDs: compileTargetIDs,
-                        unitTestHost: unitTestHost
+                        unitTestHost: unitTestHost,
+                        mergedProductLibNames: mergedProductLibNames
                     )
                 )
             )

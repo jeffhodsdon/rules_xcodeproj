@@ -476,7 +476,9 @@ private extension Target.PlatformVariant {
         buildSettingsFromFile: [PlatformVariantBuildSetting] = [],
         linkParams: String? = nil,
         unitTestHost: Target.UnitTestHost? = nil,
-        dSYMPathsBuildSetting: String? = nil
+        dSYMPathsBuildSetting: String? = nil,
+        librarySearchPaths: Set<BazelPath> = [],
+        mergedProductLibNames: String? = nil
     ) -> Self {
         return Self(
             xcodeConfigurations: xcodeConfigurations,
@@ -496,7 +498,9 @@ private extension Target.PlatformVariant {
             buildSettingsFromFile: buildSettingsFromFile,
             linkParams: linkParams,
             unitTestHost: unitTestHost,
-            dSYMPathsBuildSetting: dSYMPathsBuildSetting
+            dSYMPathsBuildSetting: dSYMPathsBuildSetting,
+            librarySearchPaths: librarySearchPaths,
+            mergedProductLibNames: mergedProductLibNames
         )
     }
 }

@@ -17,8 +17,12 @@ else
     # params
     readonly output_group_prefixes="bc,bp,bl"
   else
-    # Products (i.e. bundles) and index store data
-    readonly output_group_prefixes="bp"
+    # Products (i.e. bundles), index store data, and link params.
+    # Link params are needed for regular builds because with Bazel 8+ and
+    # objc_linking_info_migrated=True, many libraries are passed via
+    # user_link_flags in CcInfo rather than as library objects, so they
+    # don't appear in PBXFrameworksBuildPhase.
+    readonly output_group_prefixes="bp,bl"
   fi
 
   # In Xcode 14 the "Index" directory was renamed to "Index.noindex".

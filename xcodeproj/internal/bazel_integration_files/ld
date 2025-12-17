@@ -230,6 +230,42 @@ has_blocks_rt_flag=false
 developer_dir=""
 platform_name=""
 
+# Filter out merged product libraries for preview builds to prevent duplicate symbols
+# RULES_XCODEPROJ_MERGED_LIBS contains semicolon-separated library names to exclude
+# Only filter during preview builds (ENABLE_PREVIEWS=YES)
+if [[ "${ENABLE_PREVIEWS:-}" == "YES" && -n "${RULES_XCODEPROJ_MERGED_LIBS:-}" ]]; then
+  declare -A EXCLUDE_LIBS
+  IFS=';' read -ra LIB_ARRAY <<< "$RULES_XCODEPROJ_MERGED_LIBS"
+  for lib in "${LIB_ARRAY[@]}"; do
+    if [[ -n "$lib" ]]; then
+      EXCLUDE_LIBS["$lib"]=1
+    fi
+  done
+
+  filtered_passthrough=()
+  for arg in "${passthrough_args[@]}"; do
+    should_skip=false
+    # Check -l<libname> pattern
+    if [[ "$arg" =~ ^-l(.+)$ ]]; then
+      libname="${BASH_REMATCH[1]}"
+      if [[ -n "${EXCLUDE_LIBS[$libname]:-}" ]]; then
+        should_skip=true
+      fi
+    fi
+    # Check full path pattern (e.g., /path/to/libAppLib.a)
+    if [[ "$arg" =~ lib([^/]+)\.a$ ]]; then
+      libname="${BASH_REMATCH[1]}"
+      if [[ -n "${EXCLUDE_LIBS[$libname]:-}" ]]; then
+        should_skip=true
+      fi
+    fi
+    if [[ "$should_skip" == "false" ]]; then
+      filtered_passthrough+=("$arg")
+    fi
+  done
+  passthrough_args=("${filtered_passthrough[@]}")
+fi
+
 # Check if we already have required flags and identify merged static libraries
 merged_static_libs=()
 for arg in "${@:1}"; do
