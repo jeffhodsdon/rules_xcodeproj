@@ -993,6 +993,7 @@ def _process_top_level_target(
     }
 
     extension_targets = list(getattr(rule_attr, "extensions", []))
+    extension_targets.extend(getattr(rule_attr, "app_clips", []))
     extension_target = getattr(rule_attr, "extension", None)
     if extension_target:
         extension_targets.append(extension_target)
