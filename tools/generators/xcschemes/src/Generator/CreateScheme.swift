@@ -180,11 +180,11 @@ extension Generator.CreateScheme {
                     include: [.running, .analyzing]
                 )
 
-                let extensionPointIdentifier = try extensionPointIdentifiers
-                    .value(
-                        for: primary.key.sortedIds.first!,
-                        context: "Extension Target ID"
-                    )
+                // App clips don't have NSExtensionPointIdentifier —
+                // fall back to .unknown (debuggingMode=2, springboard).
+                let extensionPointIdentifier = extensionPointIdentifiers[
+                    primary.key.sortedIds.first!
+                ] ?? .unknown
 
                 launchRunnable = .hosted(
                     buildableReference: buildableReference,
@@ -239,11 +239,9 @@ extension Generator.CreateScheme {
                     include: .profiling
                 )
 
-                let extensionPointIdentifier = try extensionPointIdentifiers
-                    .value(
-                        for: primary.key.sortedIds.first!,
-                        context: "Extension Target ID"
-                    )
+                let extensionPointIdentifier = extensionPointIdentifiers[
+                    primary.key.sortedIds.first!
+                ] ?? .unknown
 
                 profileRunnable = .hosted(
                     buildableReference: buildableReference,
